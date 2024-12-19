@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube视频下载器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <!-- 标题部分 -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">YouTube视频下载器</h1>
+            <p class="text-gray-600">输入YouTube视频链接即可下载视频</p>
+        </div>
+
+        <!-- 下载表单 -->
+        <div class="max-w-xl mx-auto bg-white rounded-lg shadow-md p-6 mb-8">
+            <div class="flex gap-2">
+                <input type="text" id="videoUrl" 
+                    class="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                    placeholder="请输入YouTube视频链接">
+                <button onclick="startDownload()" 
+                    class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                    下载
+                </button>
+            </div>
+            
+            <!-- 下载进度 -->
+            <div id="progress" class="hidden mt-4">
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+                <p id="progressText" class="text-sm text-gray-600 mt-2"></p>
+            </div>
+        </div>
+
+        <!-- 视频列表 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% for video in videos %}
+            <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                <video class="w-full h-48 object-cover" controls>
+                    <source src="{{ video.filepath }}" type="video/mp4">
+                </video>
+                <div class="p-4">
+                    <h3 class="text-lg font-semibold mb-2">{{ video.title }}</h3>
+                    <div class="text-sm text-gray-600">
+                        <p>作者: {{ video.uploader }}</p>
+                        <p>时长: {{ video.duration }}秒</p>
+                        <p>大小: {{ video.filesize }}</p>
+                        <p class="mt-2 text-sm text-gray-500 line-clamp-2">{{ video.description }}</p>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        
+        function startDownload() {
+            const url = document.getElementById('videoUrl').value;
+            if (!url) {
+                alert('请输入视频链接');
+                return;
+            }
+
+            // 显示进度条
+            document.getElementById('progress').classList.remove('hidden');
+            
+            // 创建WebSocket连接
+            ws = new WebSocket(`ws://${window.location.host}/ws`);
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.status === 'downloading') {
+                    const progress = (data.downloaded_bytes / data.total_bytes) * 100;
+                    document.getElementById('progressBar').style.width = `${progress}%`;
+                    
+                    const speed = (data.speed / 1024 / 1024).toFixed(2);
+                    const eta = data.eta;
+                    document.getElementById('progressText').textContent = 
+                        `下载中... ${progress.toFixed(1)}% | 速度: ${speed}MB/s | 剩余时间: ${eta}秒`;
+                }
+                else if (data.status === 'finished') {
+                    document.getElementById('progressText').textContent = '下载完成！';
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                }
+                else if (data.status === 'error') {
+                    document.getElementById('progressText').textContent = `错误: ${data.message}`;
+                }
+            };
+            
+            ws.onopen = function() {
+                ws.send(url);
+            };
+        }
+    </script>
+</body>
+</html> 
